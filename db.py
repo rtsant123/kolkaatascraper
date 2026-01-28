@@ -28,7 +28,8 @@ def get_db_path() -> Path:
 def get_connection() -> sqlite3.Connection:
     data_dir = get_data_dir()
     data_dir.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(get_db_path()))
+    db_path = get_db_path()
+    conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -124,6 +125,15 @@ def get_latest_result() -> Optional[Dict[str, Any]]:
     ).fetchone()
     conn.close()
     return _row_to_dict(row) if row else None
+
+
+def get_row_count() -> int:
+    conn = get_connection()
+    try:
+        count = conn.execute("SELECT COUNT(*) FROM results").fetchone()[0]
+    finally:
+        conn.close()
+    return count
 
 
 def get_past_results(days: int) -> List[Dict[str, Any]]:

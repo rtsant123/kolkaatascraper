@@ -21,6 +21,16 @@ def health() -> Dict[str, bool]:
     return {"ok": True}
 
 
+@app.get("/debug/db")
+def debug_db() -> Dict[str, Any]:
+    """Lightweight debug endpoint: shows DB path and row count."""
+    return {
+        "data_dir": db.get_data_dir().as_posix(),
+        "db_path": db.get_db_path().as_posix(),
+        "rows": db.get_row_count(),
+    }
+
+
 @app.get("/api/latest")
 def latest() -> Optional[Dict[str, Any]]:
     return db.get_latest_result()
