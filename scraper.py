@@ -7,7 +7,7 @@ import os
 import re
 import time
 import datetime
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, List
 
 import requests
 from bs4 import BeautifulSoup
@@ -17,7 +17,7 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 USER_AGENT = "KolkataFFScraper/1.0 (+https://railway.app)"
 DATE_PATTERNS = [
-    re.compile(r"(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})"),  # e.g. 21 January 2026
+    re.compile(r"(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})", re.IGNORECASE),  # e.g. 21 January 2026
     re.compile(r"(\d{4}-\d{2}-\d{2})"),
     re.compile(r"(\d{2}-\d{2}-\d{4})"),
     re.compile(r"(\d{2}/\d{2}/\d{4})"),
@@ -57,23 +57,30 @@ def fetch_html(url: str, timeout_s: int = 15, max_retries: int = 3) -> str:
 
 
 def _normalize_date(raw: str) -> str:
-    try:
-        return datetime.datetime.strptime(raw, "%d %B %Y").strftime("%Y-%m-%d")
-    except ValueError:
+    cleaned = raw.strip()
+    # Handle month names (e.g. "28 January 2026" or uppercase)
+    for candidate in (cleaned, cleaned.title()):
         try:
-            return datetime.datetime.strptime(raw, "%d %b %Y").strftime("%Y-%m-%d")
+            return datetime.datetime.strptime(candidate, "%d %B %Y").strftime("%Y-%m-%d")
         except ValueError:
-            pass
-    if "/" in raw:
-        day, month, year = raw.split("/")
-        return f"{year}-{month}-{day}"
-    if raw.count("-") == 2:
-        parts = raw.split("-")
-        if len(parts[0]) == 4:
-            return raw
-        day, month, year = parts
-        return f"{year}-{month}-{day}"
-    return raw
+            try:
+                return datetime.datetime.strptime(candidate, "%d %b %Y").strftime("%Y-%m-%d")
+            except ValueError:
+                pass
+    # Handle slash-separated
+    try:
+        if "/" in cleaned:
+            day, month, year = cleaned.split("/")
+            return f"{year}-{month}-{day}"
+        if cleaned.count("-") == 2:
+            parts = cleaned.split("-")
+            if len(parts[0]) == 4:
+                return cleaned
+            day, month, year = parts
+            return f"{year}-{month}-{day}"
+    except Exception:
+        pass
+    return cleaned
 
 
 def _extract_date_time(text: str) -> Tuple[Optional[str], Optional[str]]:
@@ -88,27 +95,61 @@ def _extract_date_time(text: str) -> Tuple[Optional[str], Optional[str]]:
     return date_value, time_value
 
 
-def _extract_result_text(text: str) -> Optional[str]:
-    # First pick any clean 3-digit number, common in Kolkata FF tables
-    numeric_hits = re.findall(r"\b\d{3}\b", text)
-    if numeric_hits:
-        return numeric_hits[0]
-
-    match = RESULT_PATTERN.search(text)
-    if match:
-        return match.group(1).strip()
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
-    for line in lines:
-        if re.search(r"\d", line) and len(line) <= 50:
-            lowered = line.lower()
-            if "date" in lowered or "time" in lowered:
-                continue
-            return line
-    return None
+def _extract_result_pairs(lines: List[str]) -> Optional[str]:
+    """
+    KolkataFF.tv lists dates followed by alternating 3-digit numbers and single-digit values.
+    Build paired strings like '120-3 140-5 ...'. If no single digits, just join 3-digit numbers.
+    """
+    joined = " ".join(lines)
+    numbers = re.findall(r"\b\d{3}\b", joined)
+    singles = re.findall(r"\b\d\b", joined)
+    if not numbers:
+        return None
+    pairs: List[str] = []
+    for idx, num in enumerate(numbers):
+        if idx < len(singles):
+            pairs.append(f"{num}-{singles[idx]}")
+        else:
+            pairs.append(num)
+    return " ".join(pairs)
 
 
 def parse_latest_result(html: str) -> Dict[str, str]:
+    """
+    Extract the most recent date block with numbers from KolkataFF.tv.
+    Falls back to generic parsing if no date blocks are found.
+    """
     soup = BeautifulSoup(html, "lxml")
+    text = soup.get_text("\n", strip=True)
+    lines = [line.strip() for line in text.split("\n") if line.strip()]
+
+    # Find date headings with their index positions
+    date_positions: List[Tuple[int, str]] = []
+    for idx, line in enumerate(lines):
+        date_value = None
+        for pattern in DATE_PATTERNS:
+            match = pattern.search(line)
+            if match:
+                date_value = _normalize_date(match.group(1))
+                break
+        if date_value:
+            date_positions.append((idx, date_value))
+
+    # Walk date sections in order and pick the first that contains numbers
+    for pos, date_value in date_positions:
+        next_pos = next((p for p, _ in date_positions if p > pos), len(lines))
+        section = lines[pos + 1 : next_pos]
+        result_text = _extract_result_pairs(section)
+        if result_text:
+            signature = compute_signature(date_value, None, result_text)
+            return {
+                "draw_date": date_value,
+                "draw_time": "",
+                "result_text": result_text,
+                "signature": signature,
+            }
+
+    # Fallback: use legacy selector-based parsing
     selectors = [
         ".latest-result",
         ".latest",
@@ -128,11 +169,11 @@ def parse_latest_result(html: str) -> Dict[str, str]:
         candidates = [soup.body] if soup.body else []
 
     for candidate in candidates:
-        text = candidate.get_text("\n", strip=True)
-        if not text:
+        c_text = candidate.get_text("\n", strip=True)
+        if not c_text:
             continue
-        draw_date, draw_time = _extract_date_time(text)
-        result_text = _extract_result_text(text)
+        draw_date, draw_time = _extract_date_time(c_text)
+        result_text = _extract_result_pairs([c_text])
         if draw_date and result_text:
             signature = compute_signature(draw_date, draw_time, result_text)
             return {

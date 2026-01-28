@@ -31,7 +31,7 @@ def format_message(draw_date: str, draw_time: str | None, result_text: str) -> s
 def main() -> int:
     db.init_db()
     retention_days = int(os.getenv("RETENTION_DAYS", "60"))
-    site_url = os.getenv("SITE_URL", "https://kolkataff.ws/")
+    site_url = os.getenv("SITE_URL", "https://kolkataff.tv/")
     try:
         html = scraper.fetch_html(site_url)
         if os.getenv("SAVE_HTML", "0") == "1":
