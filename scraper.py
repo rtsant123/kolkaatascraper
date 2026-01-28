@@ -6,6 +6,7 @@ import logging
 import os
 import re
 import time
+import datetime
 from typing import Any, Dict, Optional, Tuple
 
 import requests
@@ -16,6 +17,7 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 USER_AGENT = "KolkataFFScraper/1.0 (+https://railway.app)"
 DATE_PATTERNS = [
+    re.compile(r"(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})"),  # e.g. 21 January 2026
     re.compile(r"(\d{4}-\d{2}-\d{2})"),
     re.compile(r"(\d{2}-\d{2}-\d{4})"),
     re.compile(r"(\d{2}/\d{2}/\d{4})"),
@@ -55,6 +57,13 @@ def fetch_html(url: str, timeout_s: int = 15, max_retries: int = 3) -> str:
 
 
 def _normalize_date(raw: str) -> str:
+    try:
+        return datetime.datetime.strptime(raw, "%d %B %Y").strftime("%Y-%m-%d")
+    except ValueError:
+        try:
+            return datetime.datetime.strptime(raw, "%d %b %Y").strftime("%Y-%m-%d")
+        except ValueError:
+            pass
     if "/" in raw:
         day, month, year = raw.split("/")
         return f"{year}-{month}-{day}"
@@ -80,6 +89,11 @@ def _extract_date_time(text: str) -> Tuple[Optional[str], Optional[str]]:
 
 
 def _extract_result_text(text: str) -> Optional[str]:
+    # First pick any clean 3-digit number, common in Kolkata FF tables
+    numeric_hits = re.findall(r"\b\d{3}\b", text)
+    if numeric_hits:
+        return numeric_hits[0]
+
     match = RESULT_PATTERN.search(text)
     if match:
         return match.group(1).strip()

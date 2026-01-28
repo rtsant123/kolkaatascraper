@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import sys
+from pathlib import Path
 from typing import Any
 
 import db
@@ -30,15 +31,21 @@ def format_message(draw_date: str, draw_time: str | None, result_text: str) -> s
 def main() -> int:
     db.init_db()
     retention_days = int(os.getenv("RETENTION_DAYS", "60"))
+    site_url = os.getenv("SITE_URL", "https://kolkataff.ws/")
     try:
-        parsed = scraper.fetch_latest_result()
+        html = scraper.fetch_html(site_url)
+        if os.getenv("SAVE_HTML", "0") == "1":
+            data_dir = Path(os.getenv("DATA_DIR", "/data"))
+            data_dir.mkdir(parents=True, exist_ok=True)
+            (data_dir / "last_fetch.html").write_text(html, encoding="utf-8")
+        parsed = scraper.parse_latest_result(html)
     except Exception as exc:  # noqa: BLE001
         log_event(logging.ERROR, "parse_failed", error=str(exc))
-        return 1
+        return 0  # don't fail the container; try again next run
 
     draw_time = parsed.get("draw_time") or None
     inserted = db.insert_result(
-        source=os.getenv("SITE_URL", "https://kolkataff.tv/"),
+        source=site_url,
         draw_date=parsed["draw_date"],
         draw_time=draw_time,
         result_text=parsed["result_text"],
