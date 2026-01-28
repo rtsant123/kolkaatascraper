@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import FastAPI, Query
 
 import db
+import scraper
 
 app = FastAPI()
 
@@ -33,6 +34,21 @@ def debug_db() -> Dict[str, Any]:
 
 @app.get("/api/latest")
 def latest() -> Optional[Dict[str, Any]]:
+    result = db.get_latest_result()
+    if result:
+        return result
+    # Bootstrap: if DB is empty, scrape the newest result once and persist
+    try:
+        scraped = scraper.fetch_latest_result()
+        db.insert_result(
+            source=os.getenv("SITE_URL", "https://kolkataff.tv/"),
+            draw_date=scraped["draw_date"],
+            draw_time=scraped.get("draw_time") or None,
+            result_text=scraped["result_text"],
+            signature=scraped["signature"],
+        )
+    except Exception:
+        return None
     return db.get_latest_result()
 
 
