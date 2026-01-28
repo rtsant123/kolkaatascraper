@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import sys
+import datetime
 from pathlib import Path
 from typing import Any
 
@@ -63,6 +64,17 @@ def scrape_with_fallback() -> tuple[str, list[dict[str, str]]]:
     raise RuntimeError(f"all sources failed; last_error={last_error}")
 
 
+def _within_backfill(draw_date: str, backfill_days: int) -> bool:
+    """Return True if draw_date is within backfill_days of today. If parse fails, allow insert."""
+    if backfill_days <= 0:
+        return True
+    try:
+        dt = datetime.datetime.strptime(draw_date, "%Y-%m-%d").date()
+    except ValueError:
+        return True
+    return dt >= (datetime.date.today() - datetime.timedelta(days=backfill_days))
+
+
 def main() -> int:
     # Optional: wipe DB on startup to re-play all results (controlled via env)
     if os.getenv("RESET_DB_ON_START") == "1":
@@ -74,15 +86,24 @@ def main() -> int:
             pass
     db.init_db()
     retention_days = int(os.getenv("RETENTION_DAYS", "60"))
+    backfill_days = int(os.getenv("BACKFILL_DAYS", "0"))
     try:
         source_url, results = scrape_with_fallback()
     except Exception as exc:  # noqa: BLE001
         log_event(logging.ERROR, "parse_failed", error=str(exc))
         return 0  # don't fail the container; try again next run
 
+    # Filter out old entries if BACKFILL_DAYS is set
+    if backfill_days > 0:
+        results = [r for r in results if _within_backfill(r["draw_date"], backfill_days)]
+
+    # By default send only the newest entry on the page; set SEND_ALL_RESULTS=1 to send all
+    if os.getenv("SEND_ALL_RESULTS", "0") != "1" and results:
+        results = results[:1]
+
+    # Send newest-first (page order is already newest first for KolkataFF)
     new_count = 0
-    # Insert oldest first so Telegram messages appear chronologically on first run
-    for parsed in reversed(results):
+    for parsed in results:
         draw_time = parsed.get("draw_time") or None
         inserted = db.insert_result(
             source=source_url,
