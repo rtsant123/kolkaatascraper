@@ -162,9 +162,10 @@ def _make_soup(html: str) -> BeautifulSoup:
     return BeautifulSoup(html, "html.parser")
 
 
-def parse_latest_result(html: str) -> Dict[str, str]:
+def parse_results(html: str) -> List[Dict[str, str]]:
     """
-    Extract the most recent date block with numbers from KolkataFF.tv.
+    Extract all date blocks with numbers from KolkataFF-style pages.
+    Returns a list ordered as they appear on the page (typically newest first).
     Falls back to generic parsing if no date blocks are found.
     """
     soup = _make_soup(html)
@@ -183,7 +184,10 @@ def parse_latest_result(html: str) -> Dict[str, str]:
         if date_value:
             date_positions.append((idx, date_value))
 
-    # Walk date sections in order and pick the first that contains numbers
+    results: List[Dict[str, str]] = []
+    seen_signatures: set[str] = set()
+
+    # Walk date sections in order and collect ones that contain numbers
     for pos, date_value in date_positions:
         next_pos = next((p for p, _ in date_positions if p > pos), len(lines))
         section = lines[pos + 1 : next_pos]
@@ -195,14 +199,22 @@ def parse_latest_result(html: str) -> Dict[str, str]:
 
         if result_text:
             signature = compute_signature(date_value, None, result_text)
-            return {
-                "draw_date": date_value,
-                "draw_time": "",
-                "result_text": result_text,
-                "signature": signature,
-            }
+            if signature in seen_signatures:
+                continue
+            seen_signatures.add(signature)
+            results.append(
+                {
+                    "draw_date": date_value,
+                    "draw_time": "",
+                    "result_text": result_text,
+                    "signature": signature,
+                }
+            )
 
-    # Fallback: use legacy selector-based parsing
+    if results:
+        return results
+
+    # Fallback: use legacy selector-based parsing and return a single result if found
     selectors = [
         ".latest-result",
         ".latest",
@@ -229,15 +241,41 @@ def parse_latest_result(html: str) -> Dict[str, str]:
         result_text = _extract_result_pairs([c_text])
         if draw_date and result_text:
             signature = compute_signature(draw_date, draw_time, result_text)
-            return {
-                "draw_date": draw_date,
-                "draw_time": draw_time or "",
-                "result_text": result_text,
-                "signature": signature,
-            }
+            return [
+                {
+                    "draw_date": draw_date,
+                    "draw_time": draw_time or "",
+                    "result_text": result_text,
+                    "signature": signature,
+                }
+            ]
 
     raise ValueError("Unable to parse latest result")
 
+
+def parse_latest_result(html: str) -> Dict[str, str]:
+    """Compatibility helper: return just the first parsed result."""
+    results = parse_results(html)
+    if not results:
+        raise ValueError("Unable to parse latest result")
+    return results[0]
+
+
+def fetch_results(site_url: Optional[str] = None) -> List[Dict[str, str]]:
+    """Fetch HTML from a site and return all parsed results (page order)."""
+    url = site_url or os.getenv("SITE_URL", "https://kolkataff.tv/")
+    html = fetch_html(url)
+    return parse_results(html)
+
+
+def fetch_latest_result(site_url: Optional[str] = None) -> Dict[str, str]:
+    """Fetch HTML from a site and return only the newest parsed result."""
+    url = site_url or os.getenv("SITE_URL", "https://kolkataff.tv/")
+    html = fetch_html(url)
+    results = parse_results(html)
+    if not results:
+        raise ValueError("Unable to parse latest result")
+    return results[0]
 
 def compute_signature(draw_date: str, draw_time: Optional[str], result_text: str) -> str:
     value = f"{draw_date}|{draw_time or ''}|{result_text}"
