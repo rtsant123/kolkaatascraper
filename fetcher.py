@@ -89,6 +89,8 @@ def main() -> int:
             result = telegram.send_message(message)
             if result.get("ok") is not True:
                 log_event(logging.WARNING, "telegram_not_sent", details=result)
+            # Avoid hitting Telegram flood limits on first-run bursts
+            time.sleep(1)
 
     db.cleanup_old(retention_days)
 
