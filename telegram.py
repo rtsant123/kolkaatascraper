@@ -40,7 +40,8 @@ def send_message(message: str) -> Dict[str, Any]:
             error=str(exc),
             response_text=response.text[:500],
         )
-        raise
+        # Swallow Telegram errors so the fetch job still exits 0
+        return {"ok": False, "status": response.status_code, "error": str(exc)}
 
     log_event(logging.INFO, "telegram_sent", status=response.status_code)
     return response.json()
