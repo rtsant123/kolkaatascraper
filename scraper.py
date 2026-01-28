@@ -114,12 +114,23 @@ def _extract_result_pairs(lines: List[str]) -> Optional[str]:
     return " ".join(pairs)
 
 
+def _make_soup(html: str) -> BeautifulSoup:
+    """Try lxml first for speed; fall back to built-in parser if unavailable."""
+    for parser in ("lxml", "html.parser"):
+        try:
+            return BeautifulSoup(html, parser)
+        except Exception:
+            continue
+    # Final fallback (should rarely hit)
+    return BeautifulSoup(html, "html.parser")
+
+
 def parse_latest_result(html: str) -> Dict[str, str]:
     """
     Extract the most recent date block with numbers from KolkataFF.tv.
     Falls back to generic parsing if no date blocks are found.
     """
-    soup = BeautifulSoup(html, "lxml")
+    soup = _make_soup(html)
     text = soup.get_text("\n", strip=True)
     lines = [line.strip() for line in text.split("\n") if line.strip()]
 
