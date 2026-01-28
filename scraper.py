@@ -114,6 +114,43 @@ def _extract_result_pairs(lines: List[str]) -> Optional[str]:
     return " ".join(pairs)
 
 
+def _extract_kolkataff_in_section(lines: List[str]) -> Optional[str]:
+    """
+    kolkataff.in structure:
+      Date
+      <maybe header line>
+      line with 3-digit numbers and dashes
+      line with single digits and dashes
+    """
+    row1 = None
+    row2 = None
+    for line in lines:
+        if row1 is None and re.search(r"\b\d{3}\b", line):
+            row1 = line
+            continue
+        if row1 is not None and row2 is None and re.search(r"\b\d\b", line):
+            row2 = line
+            break
+
+    if row1 is None:
+        return None
+
+    tokens1 = re.findall(r"\b\d{3}\b|[-–]", row1)
+    tokens2 = re.findall(r"\b\d\b|[-–]", row2) if row2 else []
+
+    pairs: List[str] = []
+    for idx, tok in enumerate(tokens1):
+        if tok in ("-", "–"):
+            continue
+        suffix = tokens2[idx] if idx < len(tokens2) else None
+        if suffix and suffix not in ("-", "–"):
+            pairs.append(f"{tok}-{suffix}")
+        else:
+            pairs.append(tok)
+
+    return " ".join(pairs) if pairs else None
+
+
 def _make_soup(html: str) -> BeautifulSoup:
     """Try lxml first for speed; fall back to built-in parser if unavailable."""
     for parser in ("lxml", "html.parser"):
@@ -150,7 +187,12 @@ def parse_latest_result(html: str) -> Dict[str, str]:
     for pos, date_value in date_positions:
         next_pos = next((p for p, _ in date_positions if p > pos), len(lines))
         section = lines[pos + 1 : next_pos]
-        result_text = _extract_result_pairs(section)
+
+        # kolkataff.in specific pairing
+        result_text = _extract_kolkataff_in_section(section)
+        if not result_text:
+            result_text = _extract_result_pairs(section)
+
         if result_text:
             signature = compute_signature(date_value, None, result_text)
             return {
