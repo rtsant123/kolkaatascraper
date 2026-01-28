@@ -23,9 +23,11 @@ DATE_PATTERNS = [
     re.compile(r"(\d{2}/\d{2}/\d{4})"),
 ]
 TIME_PATTERN = re.compile(r"(\d{1,2}:\d{2})")
-RESULT_PATTERN = re.compile(
-    r"(?i)result\s*[:\-]?\s*([A-Za-z0-9\- ]{2,})"
-)
+RESULT_PATTERN = re.compile(r"(?i)result\s*[:\-]?\s*([A-Za-z0-9\- ]{2,})")
+# Schedule defaults: first draw 10:20, then every 90 minutes, 8 draws/day.
+DEFAULT_FIRST_DRAW = "10:20"
+DEFAULT_DRAW_INTERVAL_MIN = 90
+DEFAULT_DRAWS_PER_DAY = 8
 
 
 def log_event(level: int, message: str, **fields: Any) -> None:
@@ -95,10 +97,10 @@ def _extract_date_time(text: str) -> Tuple[Optional[str], Optional[str]]:
     return date_value, time_value
 
 
-def _extract_result_pairs(lines: List[str]) -> Optional[str]:
+def _extract_result_pairs(lines: List[str]) -> Optional[List[str]]:
     """
     KolkataFF.tv lists dates followed by alternating 3-digit numbers and single-digit values.
-    Build paired strings like '120-3 140-5 ...'. If no single digits, just join 3-digit numbers.
+    Build list like ['120-3', '140-5', ...]. If no single digits, just the 3-digit numbers.
     """
     joined = " ".join(lines)
     numbers = re.findall(r"\b\d{3}\b", joined)
@@ -111,10 +113,10 @@ def _extract_result_pairs(lines: List[str]) -> Optional[str]:
             pairs.append(f"{num}-{singles[idx]}")
         else:
             pairs.append(num)
-    return " ".join(pairs)
+    return pairs
 
 
-def _extract_kolkataff_in_section(lines: List[str]) -> Optional[str]:
+def _extract_kolkataff_in_section(lines: List[str]) -> Optional[List[str]]:
     """
     kolkataff.in structure:
       Date
@@ -122,33 +124,19 @@ def _extract_kolkataff_in_section(lines: List[str]) -> Optional[str]:
       line with 3-digit numbers and dashes
       line with single digits and dashes
     """
-    row1 = None
-    row2 = None
-    for line in lines:
-        if row1 is None and re.search(r"\b\d{3}\b", line):
-            row1 = line
-            continue
-        if row1 is not None and row2 is None and re.search(r"\b\d\b", line):
-            row2 = line
-            break
-
-    if row1 is None:
+    joined = " ".join(lines)
+    numbers = re.findall(r"\b\d{3}\b", joined)
+    singles = re.findall(r"\b\d\b", joined)
+    if not numbers:
         return None
-
-    tokens1 = re.findall(r"\b\d{3}\b|[-–]", row1)
-    tokens2 = re.findall(r"\b\d\b|[-–]", row2) if row2 else []
-
     pairs: List[str] = []
-    for idx, tok in enumerate(tokens1):
-        if tok in ("-", "–"):
-            continue
-        suffix = tokens2[idx] if idx < len(tokens2) else None
+    for idx, num in enumerate(numbers):
+        suffix = singles[idx] if idx < len(singles) else None
         if suffix and suffix not in ("-", "–"):
-            pairs.append(f"{tok}-{suffix}")
+            pairs.append(f"{num}-{suffix}")
         else:
-            pairs.append(tok)
-
-    return " ".join(pairs) if pairs else None
+            pairs.append(num)
+    return pairs if pairs else None
 
 
 def _make_soup(html: str) -> BeautifulSoup:
@@ -160,6 +148,21 @@ def _make_soup(html: str) -> BeautifulSoup:
             continue
     # Final fallback (should rarely hit)
     return BeautifulSoup(html, "html.parser")
+
+
+def _build_draw_times(count: int) -> List[str]:
+    """Generate draw times for the day based on env or defaults."""
+    first_str = os.getenv("FIRST_DRAW_TIME", DEFAULT_FIRST_DRAW)
+    interval_min = int(os.getenv("DRAW_INTERVAL_MIN", str(DEFAULT_DRAW_INTERVAL_MIN)))
+    times: List[str] = []
+    try:
+        base = datetime.datetime.strptime(first_str, "%H:%M")
+    except ValueError:
+        base = datetime.datetime.strptime(DEFAULT_FIRST_DRAW, "%H:%M")
+    for idx in range(count):
+        t = base + datetime.timedelta(minutes=interval_min * idx)
+        times.append(t.strftime("%H:%M"))
+    return times
 
 
 def parse_results(html: str) -> List[Dict[str, str]]:
@@ -184,32 +187,43 @@ def parse_results(html: str) -> List[Dict[str, str]]:
         if date_value:
             date_positions.append((idx, date_value))
 
+    # Merge consecutive duplicate dates so sections aren't zero-length
+    merged_positions: List[Tuple[int, str]] = []
+    for idx, date_value in date_positions:
+        if merged_positions and merged_positions[-1][1] == date_value:
+            # keep the later index for the same date block
+            merged_positions[-1] = (idx, date_value)
+        else:
+            merged_positions.append((idx, date_value))
+
     results: List[Dict[str, str]] = []
     seen_signatures: set[str] = set()
 
     # Walk date sections in order and collect ones that contain numbers
-    for pos, date_value in date_positions:
-        next_pos = next((p for p, _ in date_positions if p > pos), len(lines))
+    for pos, date_value in merged_positions:
+        next_pos = next((p for p, _ in merged_positions if p > pos), len(lines))
         section = lines[pos + 1 : next_pos]
 
         # kolkataff.in specific pairing
-        result_text = _extract_kolkataff_in_section(section)
-        if not result_text:
-            result_text = _extract_result_pairs(section)
+        result_pairs = _extract_kolkataff_in_section(section)
+        if not result_pairs:
+            result_pairs = _extract_result_pairs(section)
 
-        if result_text:
-            signature = compute_signature(date_value, None, result_text)
-            if signature in seen_signatures:
-                continue
-            seen_signatures.add(signature)
-            results.append(
-                {
-                    "draw_date": date_value,
-                    "draw_time": "",
-                    "result_text": result_text,
-                    "signature": signature,
-                }
-            )
+        if result_pairs:
+            times = _build_draw_times(len(result_pairs))
+            for pair, draw_time in zip(result_pairs, times):
+                signature = compute_signature(date_value, draw_time, pair)
+                if signature in seen_signatures:
+                    continue
+                seen_signatures.add(signature)
+                results.append(
+                    {
+                        "draw_date": date_value,
+                        "draw_time": draw_time,
+                        "result_text": pair,
+                        "signature": signature,
+                    }
+                )
 
     if results:
         return results
@@ -238,17 +252,21 @@ def parse_results(html: str) -> List[Dict[str, str]]:
         if not c_text:
             continue
         draw_date, draw_time = _extract_date_time(c_text)
-        result_text = _extract_result_pairs([c_text])
-        if draw_date and result_text:
-            signature = compute_signature(draw_date, draw_time, result_text)
-            return [
-                {
-                    "draw_date": draw_date,
-                    "draw_time": draw_time or "",
-                    "result_text": result_text,
-                    "signature": signature,
-                }
-            ]
+        result_pairs = _extract_result_pairs([c_text])
+        if draw_date and result_pairs:
+            times = _build_draw_times(len(result_pairs))
+            fallback_results: List[Dict[str, str]] = []
+            for pair, dt in zip(result_pairs, times):
+                signature = compute_signature(draw_date, dt, pair)
+                fallback_results.append(
+                    {
+                        "draw_date": draw_date,
+                        "draw_time": dt,
+                        "result_text": pair,
+                        "signature": signature,
+                    }
+                )
+            return fallback_results
 
     raise ValueError("Unable to parse latest result")
 
@@ -280,9 +298,3 @@ def fetch_latest_result(site_url: Optional[str] = None) -> Dict[str, str]:
 def compute_signature(draw_date: str, draw_time: Optional[str], result_text: str) -> str:
     value = f"{draw_date}|{draw_time or ''}|{result_text}"
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
-
-
-def fetch_latest_result(site_url: Optional[str] = None) -> Dict[str, str]:
-    url = site_url or os.getenv("SITE_URL", "https://kolkataff.tv/")
-    html = fetch_html(url)
-    return parse_latest_result(html)

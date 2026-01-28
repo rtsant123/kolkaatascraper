@@ -98,8 +98,8 @@ def main() -> int:
     if backfill_days > 0:
         results = [r for r in results if _within_backfill(r["draw_date"], backfill_days)]
 
-    # By default send only the newest entry on the page; set SEND_ALL_RESULTS=1 to send all
-    if os.getenv("SEND_ALL_RESULTS", "0") != "1" and results:
+    # Default: send all results found; set SEND_ALL_RESULTS=0 to send only newest
+    if os.getenv("SEND_ALL_RESULTS", "1") != "1" and results:
         results = results[:1]
 
     # Send newest-first (page order is already newest first for KolkataFF)
