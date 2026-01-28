@@ -87,7 +87,7 @@ def main() -> int:
             pass
     db.init_db()
     retention_days = int(os.getenv("RETENTION_DAYS", "60"))
-    backfill_days = int(os.getenv("BACKFILL_DAYS", "0"))
+    backfill_days = int(os.getenv("BACKFILL_DAYS", "1"))
     try:
         source_url, results = scrape_with_fallback()
     except Exception as exc:  # noqa: BLE001
@@ -98,8 +98,8 @@ def main() -> int:
     if backfill_days > 0:
         results = [r for r in results if _within_backfill(r["draw_date"], backfill_days)]
 
-    # Default: send all results found; set SEND_ALL_RESULTS=0 to send only newest
-    if os.getenv("SEND_ALL_RESULTS", "1") != "1" and results:
+    # Default: send only newest; set SEND_ALL_RESULTS=1 to send all parsed draws
+    if os.getenv("SEND_ALL_RESULTS", "0") != "1" and results:
         results = results[:1]
 
     # Send newest-first (page order is already newest first for KolkataFF)
