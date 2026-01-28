@@ -10,7 +10,7 @@ A Railway-ready scraper and API for Kolkata FF results. The system stores result
 - Cron-friendly fetcher with retries and backoff.
 
 ## Environment Variables
-- `SITE_URL` (default: `https://kolkataff.tv/`)
+- `SITE_URL` (optional: force a single source URL; otherwise the scraper tries `https://kolkataff.tv/`, then `https://kolkataff.in/`, then `https://kolkataff.net/`)
 - `TELEGRAM_BOT_TOKEN` (required for Telegram posting)
 - `TELEGRAM_CHAT_ID` (required for Telegram posting)
 - `DATA_DIR` (default: `/data`)

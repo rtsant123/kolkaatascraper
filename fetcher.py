@@ -28,24 +28,53 @@ def format_message(draw_date: str, draw_time: str | None, result_text: str) -> s
     return "\n".join(lines)
 
 
+def scrape_with_fallback() -> tuple[str, dict[str, str]]:
+    """
+    Try multiple sources so a single 502/host outage doesn't stop inserts.
+    Priority:
+      1) Explicit SITE_URL if provided
+      2) Known mirrors (tv -> in -> net)
+    """
+    env_site = os.getenv("SITE_URL")
+    candidates = (
+        [env_site]
+        if env_site
+        else [
+            "https://kolkataff.tv/",
+            "https://kolkataff.in/",
+            "https://kolkataff.net/",
+        ]
+    )
+
+    last_error: str | None = None
+    for url in candidates:
+        try:
+            html = scraper.fetch_html(url)
+            if os.getenv("SAVE_HTML", "0") == "1":
+                data_dir = Path(os.getenv("DATA_DIR", "/data"))
+                data_dir.mkdir(parents=True, exist_ok=True)
+                (data_dir / "last_fetch.html").write_text(html, encoding="utf-8")
+            parsed = scraper.parse_latest_result(html)
+            return url, parsed
+        except Exception as exc:  # noqa: BLE001
+            last_error = str(exc)
+            log_event(logging.WARNING, "scrape_source_failed", source=url, error=last_error)
+
+    raise RuntimeError(f"all sources failed; last_error={last_error}")
+
+
 def main() -> int:
     db.init_db()
     retention_days = int(os.getenv("RETENTION_DAYS", "60"))
-    site_url = os.getenv("SITE_URL", "https://kolkataff.in/")
     try:
-        html = scraper.fetch_html(site_url)
-        if os.getenv("SAVE_HTML", "0") == "1":
-            data_dir = Path(os.getenv("DATA_DIR", "/data"))
-            data_dir.mkdir(parents=True, exist_ok=True)
-            (data_dir / "last_fetch.html").write_text(html, encoding="utf-8")
-        parsed = scraper.parse_latest_result(html)
+        source_url, parsed = scrape_with_fallback()
     except Exception as exc:  # noqa: BLE001
         log_event(logging.ERROR, "parse_failed", error=str(exc))
         return 0  # don't fail the container; try again next run
 
     draw_time = parsed.get("draw_time") or None
     inserted = db.insert_result(
-        source=site_url,
+        source=source_url,
         draw_date=parsed["draw_date"],
         draw_time=draw_time,
         result_text=parsed["result_text"],
