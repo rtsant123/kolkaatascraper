@@ -10,6 +10,12 @@ import db
 app = FastAPI()
 
 
+@app.on_event("startup")
+def init_db() -> None:
+    """Ensure the SQLite schema exists when the API starts."""
+    db.init_db()
+
+
 @app.get("/health")
 def health() -> Dict[str, bool]:
     return {"ok": True}
