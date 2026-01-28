@@ -64,6 +64,14 @@ def scrape_with_fallback() -> tuple[str, list[dict[str, str]]]:
 
 
 def main() -> int:
+    # Optional: wipe DB on startup to re-play all results (controlled via env)
+    if os.getenv("RESET_DB_ON_START") == "1":
+        db_path = db.get_db_path()
+        try:
+            db_path.unlink()
+            log_event(logging.WARNING, "db_reset", path=str(db_path))
+        except FileNotFoundError:
+            pass
     db.init_db()
     retention_days = int(os.getenv("RETENTION_DAYS", "60"))
     try:
