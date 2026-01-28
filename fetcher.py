@@ -55,7 +55,11 @@ def main() -> int:
 
     if inserted:
         message = format_message(parsed["draw_date"], draw_time, parsed["result_text"])
-        telegram.send_message(message)
+        try:
+            telegram.send_message(message)
+        except Exception as exc:  # noqa: BLE001
+            log_event(logging.ERROR, "telegram_failed", error=str(exc))
+            # do not fail the run if telegram is misconfigured
 
     return 0
 

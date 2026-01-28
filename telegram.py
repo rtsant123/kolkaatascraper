@@ -6,6 +6,7 @@ import os
 from typing import Any, Dict
 
 import requests
+from requests import HTTPError
 
 LOGGER = logging.getLogger("kolkataff.telegram")
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -29,6 +30,17 @@ def send_message(message: str) -> Dict[str, Any]:
         "disable_web_page_preview": True,
     }
     response = requests.post(url, json=payload, timeout=15)
-    response.raise_for_status()
+    try:
+        response.raise_for_status()
+    except HTTPError as exc:  # noqa: BLE001
+        log_event(
+            logging.ERROR,
+            "telegram_failed",
+            status=response.status_code,
+            error=str(exc),
+            response_text=response.text[:500],
+        )
+        raise
+
     log_event(logging.INFO, "telegram_sent", status=response.status_code)
     return response.json()
