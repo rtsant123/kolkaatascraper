@@ -102,8 +102,6 @@ def main() -> int:
     results = [r for r in results if r.get("draw_date") in allowed_dates]
 
     # Default: send only newest; set SEND_ALL_RESULTS=1 to send all parsed draws
-    if os.getenv("SEND_ALL_RESULTS", "0") != "1" and results:
-        results = results[:1]
 
     # Send newest-first (page order is already newest first for KolkataFF)
     new_count = 0
