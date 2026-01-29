@@ -23,12 +23,12 @@ def health() -> Dict[str, bool]:
 
 @app.get("/debug/db")
 def debug_db() -> Dict[str, Any]:
-    """Lightweight debug endpoint: shows DB path and row count."""
-    return {
-        "data_dir": db.get_data_dir().as_posix(),
-        "db_path": db.get_db_path().as_posix(),
-        "rows": db.get_row_count(),
-    }
+    """Lightweight debug endpoint: shows DB row count and connection test."""
+    try:
+        rows = db.get_row_count()
+        return {"ok": True, "rows": rows}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
 
 
 
