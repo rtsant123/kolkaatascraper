@@ -194,16 +194,6 @@ def cleanup_old(retention_days: int) -> int:
     return deleted
 
 
-def _row_to_dict(row: sqlite3.Row) -> Dict[str, Any]:
-    return {
-        "id": row["id"],
-        "source": row["source"],
-        "draw_date": row["draw_date"],
-        "draw_time": row["draw_time"],
-        "result_text": row["result_text"],
-        "signature": row["signature"],
-        "created_at": row["created_at"],
-    }
 
 
 def get_latest_result() -> Optional[Dict[str, Any]]:
