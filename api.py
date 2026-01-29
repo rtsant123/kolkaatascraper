@@ -1,3 +1,15 @@
+# Returns all results for the latest available date, omitting the 'source' field
+@app.get("/api/latest-day-clean")
+def latest_day_clean() -> List[Dict[str, Any]]:
+    latest = db.get_latest_result()
+    if not latest:
+        return []
+    latest_date = latest["draw_date"]
+    results = db.get_results_by_date(latest_date)
+    # Remove 'source' from each result
+    for r in results:
+        r.pop("source", None)
+    return results
 from __future__ import annotations
 
 import os
