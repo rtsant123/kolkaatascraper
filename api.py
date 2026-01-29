@@ -8,6 +8,7 @@ from fastapi import FastAPI, Query
 import db
 import scraper
 
+
 app = FastAPI()
 
 
@@ -32,12 +33,13 @@ def debug_db() -> Dict[str, Any]:
     }
 
 
+
+# Returns the latest single result (unchanged)
 @app.get("/api/latest")
 def latest() -> Optional[Dict[str, Any]]:
     result = db.get_latest_result()
     if result:
         return result
-    # Bootstrap: if DB is empty, scrape the newest result once and persist
     try:
         scraped = scraper.fetch_latest_result()
         db.insert_result(
@@ -50,6 +52,15 @@ def latest() -> Optional[Dict[str, Any]]:
     except Exception:
         return None
     return db.get_latest_result()
+
+# Returns all results for the latest available date (all draws for the latest day)
+@app.get("/api/latest-day")
+def latest_day() -> List[Dict[str, Any]]:
+    latest = db.get_latest_result()
+    if not latest:
+        return []
+    latest_date = latest["draw_date"]
+    return db.get_results_by_date(latest_date)
 
 
 @app.get("/api/past")
