@@ -198,38 +198,40 @@ def cleanup_old(retention_days: int) -> int:
 
 def get_latest_result() -> Optional[Dict[str, Any]]:
     conn = get_connection()
-    row = conn.execute(
-        "SELECT * FROM results ORDER BY created_at DESC LIMIT 1"
-    ).fetchone()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM results ORDER BY created_at DESC LIMIT 1")
+    row = cursor.fetchone()
+    cursor.close()
     conn.close()
-    return _row_to_dict(row) if row else None
+    return row if row else None
 
 
 def get_row_count() -> int:
     conn = get_connection()
-    try:
-        count = conn.execute("SELECT COUNT(*) FROM results").fetchone()[0]
-    finally:
-        conn.close()
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM results")
+    count = cursor.fetchone()[0]
+    cursor.close()
+    conn.close()
     return count
 
 
 def get_past_results(days: int) -> List[Dict[str, Any]]:
     cutoff = int(time.time()) - days * 86400
     conn = get_connection()
-    rows = conn.execute(
-        "SELECT * FROM results WHERE created_at >= ? ORDER BY created_at DESC",
-        (cutoff,),
-    ).fetchall()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM results WHERE created_at >= %s ORDER BY created_at DESC", (cutoff,))
+    rows = cursor.fetchall()
+    cursor.close()
     conn.close()
-    return [_row_to_dict(row) for row in rows]
+    return rows
 
 
 def get_results_by_date(date: str) -> List[Dict[str, Any]]:
     conn = get_connection()
-    rows = conn.execute(
-        "SELECT * FROM results WHERE draw_date = ? ORDER BY created_at DESC",
-        (date,),
-    ).fetchall()
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM results WHERE draw_date = %s ORDER BY created_at DESC", (date,))
+    rows = cursor.fetchall()
+    cursor.close()
     conn.close()
-    return [_row_to_dict(row) for row in rows]
+    return rows
