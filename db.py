@@ -160,40 +160,35 @@ def insert_result(
     created_at = created_at or int(time.time())
     print(f"[DEBUG] Attempting to insert result: source={source}, draw_date={draw_date}, draw_time={draw_time}, result_text={result_text}, signature={signature}, created_at={created_at}")
     conn = get_connection()
+    cursor = conn.cursor()
     try:
-        with conn:
-            conn.execute(
-                """
-                INSERT INTO results (source, draw_date, draw_time, result_text, signature, created_at)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (source, draw_date, draw_time, result_text, signature, created_at),
-            )
-        log_event(
-            logging.INFO,
-            "result_inserted",
-            source=source,
-            draw_date=draw_date,
-            draw_time=draw_time,
-            signature=signature,
+        cursor.execute(
+            """
+            INSERT INTO results (source, draw_date, draw_time, result_text, signature, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            """,
+            (source, draw_date, draw_time, result_text, signature, created_at),
         )
+        conn.commit()
         print(f"[DEBUG] Inserted result successfully: signature={signature}")
         return True
-    except sqlite3.IntegrityError:
+    except mysql.connector.IntegrityError:
         print(f"[DEBUG] Duplicate result detected, not inserted: signature={signature}")
-        log_event(logging.INFO, "result_duplicate", signature=signature)
         return False
     finally:
+        cursor.close()
         conn.close()
 
 
 def cleanup_old(retention_days: int) -> int:
     cutoff = int(time.time()) - retention_days * 86400
     conn = get_connection()
-    with conn:
-        cursor = conn.execute("DELETE FROM results WHERE created_at < ?", (cutoff,))
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM results WHERE created_at < %s", (cutoff,))
+    deleted = cursor.rowcount
+    conn.commit()
+    cursor.close()
     conn.close()
-    deleted = cursor.rowcount if cursor else 0
     if deleted:
         log_event(logging.INFO, "cleanup_deleted", deleted=deleted)
     return deleted
