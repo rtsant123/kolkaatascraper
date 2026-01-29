@@ -55,19 +55,17 @@ def latest() -> Optional[Dict[str, Any]]:
         return None
     return db.get_latest_result()
 
-# Returns all results for the latest available date (all draws for the latest day)
+
+# Returns all results for today only (not yesterday or past dates)
 @app.get("/api/latest-day")
 def latest_day() -> List[Dict[str, Any]]:
-    latest = db.get_latest_result()
-    if not latest:
-        return []
-    latest_date = latest["draw_date"]
-    results = db.get_results_by_date(latest_date)
-    # Remove 'source' from each result
+    import datetime
+    today = datetime.date.today().strftime("%Y-%m-%d")
+    results = db.get_results_by_date(today)
     cleaned = []
     for r in results:
         if isinstance(r, dict):
-            r = dict(r)  # copy to avoid mutating DB row
+            r = dict(r)
             r.pop("source", None)
             cleaned.append(r)
     return cleaned
