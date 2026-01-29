@@ -113,26 +113,30 @@ def get_results_by_date(date: str) -> List[Dict[str, Any]]:
 
 def init_db() -> None:
     conn = get_connection()
-    with conn:
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS results (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                source TEXT NOT NULL,
-                draw_date TEXT NOT NULL,
-                draw_time TEXT,
-                result_text TEXT NOT NULL,
-                signature TEXT NOT NULL UNIQUE,
-                created_at INTEGER NOT NULL
-            )
-            """
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS results (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            source VARCHAR(255) NOT NULL,
+            draw_date VARCHAR(20) NOT NULL,
+            draw_time VARCHAR(20),
+            result_text VARCHAR(255) NOT NULL,
+            signature VARCHAR(255) NOT NULL UNIQUE,
+            created_at BIGINT NOT NULL
         )
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_results_draw_date ON results(draw_date)"
-        )
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_results_created_at ON results(created_at)"
-        )
+        """
+    )
+    try:
+        cursor.execute("CREATE INDEX idx_results_draw_date ON results(draw_date)")
+    except Exception:
+        pass
+    try:
+        cursor.execute("CREATE INDEX idx_results_created_at ON results(created_at)")
+    except Exception:
+        pass
+    conn.commit()
+    cursor.close()
     conn.close()
 
 
