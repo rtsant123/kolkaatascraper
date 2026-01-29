@@ -2,6 +2,12 @@
 @app.get("/api/latest-day-clean")
 def latest_day_clean() -> List[Dict[str, Any]]:
     latest = db.get_latest_result()
+    from __future__ import annotations
+    import os
+    from typing import Any, Dict, List, Optional
+    from fastapi import FastAPI, Query, HTTPException
+    import db
+    import scraper
     if not latest:
         return []
     latest_date = latest["draw_date"]
