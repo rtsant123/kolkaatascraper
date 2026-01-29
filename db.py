@@ -104,7 +104,7 @@ def get_past_results(days: int) -> List[Dict[str, Any]]:
 def get_results_by_date(date: str) -> List[Dict[str, Any]]:
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
-    cursor.execute("SELECT * FROM results WHERE draw_date = %s ORDER BY draw_time ASC", (date,))
+    cursor.execute("SELECT * FROM results WHERE draw_date = %s ORDER BY STR_TO_DATE(draw_time, '%H:%i') ASC", (date,))
     rows = cursor.fetchall()
     cursor.close()
     conn.close()
