@@ -94,9 +94,12 @@ def main() -> int:
         log_event(logging.ERROR, "parse_failed", error=str(exc))
         return 0  # don't fail the container; try again next run
 
-    # Filter out old entries if BACKFILL_DAYS is set
-    if backfill_days > 0:
-        results = [r for r in results if _within_backfill(r["draw_date"], backfill_days)]
+
+    # Only keep results for today (and optionally tomorrow)
+    today = datetime.date.today().strftime("%Y-%m-%d")
+    tomorrow = (datetime.date.today() + datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+    allowed_dates = {today, tomorrow}
+    results = [r for r in results if r.get("draw_date") in allowed_dates]
 
     # Default: send only newest; set SEND_ALL_RESULTS=1 to send all parsed draws
     if os.getenv("SEND_ALL_RESULTS", "0") != "1" and results:
