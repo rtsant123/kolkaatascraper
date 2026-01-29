@@ -112,32 +112,41 @@ def get_results_by_date(date: str) -> List[Dict[str, Any]]:
 
 
 def init_db() -> None:
+    print("[DEBUG] Running init_db() for MySQL...")
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS results (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            source VARCHAR(255) NOT NULL,
-            draw_date VARCHAR(20) NOT NULL,
-            draw_time VARCHAR(20),
-            result_text VARCHAR(255) NOT NULL,
-            signature VARCHAR(255) NOT NULL UNIQUE,
-            created_at BIGINT NOT NULL
+    try:
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS results (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                source VARCHAR(255) NOT NULL,
+                draw_date VARCHAR(20) NOT NULL,
+                draw_time VARCHAR(20),
+                result_text VARCHAR(255) NOT NULL,
+                signature VARCHAR(255) NOT NULL UNIQUE,
+                created_at BIGINT NOT NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """
         )
-        """
-    )
-    try:
-        cursor.execute("CREATE INDEX idx_results_draw_date ON results(draw_date)")
-    except Exception:
-        pass
-    try:
-        cursor.execute("CREATE INDEX idx_results_created_at ON results(created_at)")
-    except Exception:
-        pass
-    conn.commit()
-    cursor.close()
-    conn.close()
+        print("[DEBUG] Table creation attempted.")
+        # MySQL does not support CREATE INDEX IF NOT EXISTS until v8.0. So check if index exists first.
+        cursor.execute("SHOW INDEX FROM results WHERE Key_name = 'idx_results_draw_date'")
+        if not cursor.fetchone():
+            cursor.execute("CREATE INDEX idx_results_draw_date ON results(draw_date)")
+            print("[DEBUG] Created idx_results_draw_date index.")
+        cursor.execute("SHOW INDEX FROM results WHERE Key_name = 'idx_results_created_at'")
+        if not cursor.fetchone():
+            cursor.execute("CREATE INDEX idx_results_created_at ON results(created_at)")
+            print("[DEBUG] Created idx_results_created_at index.")
+        conn.commit()
+        print("[DEBUG] init_db() completed successfully.")
+    except Exception as e:
+        print(f"[ERROR] init_db failed: {e}")
+        raise
+    finally:
+        cursor.close()
+        conn.close()
 
 
 def insert_result(
