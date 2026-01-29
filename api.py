@@ -1,12 +1,8 @@
+
 from __future__ import annotations
 import os
 from typing import Any, Dict, List, Optional
 from fastapi import FastAPI, Query, HTTPException
-import db
-import scraper
-import os
-from typing import Any, Dict, List, Optional
-from fastapi import FastAPI, Query
 import db
 import scraper
 
