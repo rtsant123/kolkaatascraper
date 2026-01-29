@@ -5,7 +5,6 @@ import logging
 import os
 import sqlite3
 import time
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 LOGGER = logging.getLogger("kolkataff.db")
@@ -13,12 +12,16 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 
 def log_event(level: int, message: str, **fields: Any) -> None:
-    payload = {"message": message, **fields}
+def get_connection() -> mysql.connector.MySQLConnection:
     LOGGER.log(level, json.dumps(payload, ensure_ascii=False))
 
-
-def get_data_dir() -> Path:
-    return Path(os.getenv("DATA_DIR", "/data"))
+    conn = mysql.connector.connect(
+        host=os.getenv("MYSQL_HOST"),
+        user=os.getenv("MYSQL_USER"),
+        password=os.getenv("MYSQL_PASSWORD"),
+        database=os.getenv("MYSQL_DATABASE"),
+        port=int(os.getenv("MYSQL_PORT", "3306")),
+    )
 
 
 def get_db_path() -> Path:
