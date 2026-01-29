@@ -31,8 +31,14 @@ def init_db():
         )
         """
     )
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_results_draw_date ON results(draw_date)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_results_created_at ON results(created_at)")
+    try:
+        cursor.execute("CREATE INDEX idx_results_draw_date ON results(draw_date)")
+    except Exception:
+        pass
+    try:
+        cursor.execute("CREATE INDEX idx_results_created_at ON results(created_at)")
+    except Exception:
+        pass
     conn.commit()
     cursor.close()
     conn.close()
