@@ -68,6 +68,7 @@ def insert_result(
     created_at: Optional[int] = None,
 ) -> bool:
     created_at = created_at or int(time.time())
+    print(f"[DEBUG] Attempting to insert result: source={source}, draw_date={draw_date}, draw_time={draw_time}, result_text={result_text}, signature={signature}, created_at={created_at}")
     conn = get_connection()
     try:
         with conn:
@@ -86,8 +87,10 @@ def insert_result(
             draw_time=draw_time,
             signature=signature,
         )
+        print(f"[DEBUG] Inserted result successfully: signature={signature}")
         return True
     except sqlite3.IntegrityError:
+        print(f"[DEBUG] Duplicate result detected, not inserted: signature={signature}")
         log_event(logging.INFO, "result_duplicate", signature=signature)
         return False
     finally:
