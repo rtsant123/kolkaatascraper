@@ -62,7 +62,15 @@ def latest_day() -> List[Dict[str, Any]]:
     if not latest:
         return []
     latest_date = latest["draw_date"]
-    return db.get_results_by_date(latest_date)
+    results = db.get_results_by_date(latest_date)
+    # Remove 'source' from each result
+    cleaned = []
+    for r in results:
+        if isinstance(r, dict):
+            r = dict(r)  # copy to avoid mutating DB row
+            r.pop("source", None)
+            cleaned.append(r)
+    return cleaned
 
 
 @app.get("/api/past")
