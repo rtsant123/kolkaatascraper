@@ -103,20 +103,6 @@ def get_results_by_date(date: str) -> List[Dict[str, Any]]:
     cursor.close()
     conn.close()
     return rows
-    )
-
-
-def get_db_path() -> Path:
-    return get_data_dir() / "results.db"
-
-
-def get_connection() -> sqlite3.Connection:
-    data_dir = get_data_dir()
-    data_dir.mkdir(parents=True, exist_ok=True)
-    db_path = get_db_path()
-    conn = sqlite3.connect(str(db_path))
-    conn.row_factory = sqlite3.Row
-    return conn
 
 
 def init_db() -> None:
