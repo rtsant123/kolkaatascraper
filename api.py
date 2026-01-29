@@ -10,13 +10,11 @@ def latest_day_clean() -> List[Dict[str, Any]]:
     for r in results:
         r.pop("source", None)
     return results
-from __future__ import annotations
 
+from __future__ import annotations
 import os
 from typing import Any, Dict, List, Optional
-
 from fastapi import FastAPI, Query
-
 import db
 import scraper
 
