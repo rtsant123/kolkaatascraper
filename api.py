@@ -56,19 +56,36 @@ def latest() -> Optional[Dict[str, Any]]:
     return db.get_latest_result()
 
 
-# Returns all results for today only (not yesterday or past dates)
+
+# Returns all results for today only, in custom format
 @app.get("/api/latest-day")
-def latest_day() -> List[Dict[str, Any]]:
+def latest_day() -> dict:
     import datetime
+    import calendar
     today = datetime.date.today().strftime("%Y-%m-%d")
     results = db.get_results_by_date(today)
-    cleaned = []
-    for r in results:
-        if isinstance(r, dict):
-            r = dict(r)
-            r.pop("source", None)
-            cleaned.append(r)
-    return cleaned
+    # Prepare sections (always 8)
+    sections = []
+    for i in range(8):
+        if i < len(results):
+            r = results[i]
+            field1, field2 = "-", "-"
+            time = r.get("draw_time", "-")
+            if "result_text" in r and "-" in r["result_text"]:
+                parts = r["result_text"].split("-")
+                if len(parts) == 2:
+                    field1, field2 = parts[0].strip(), parts[1].strip()
+            sections.append({"number": i+1, "field1": field1, "field2": field2, "time": time})
+        else:
+            sections.append({"number": i+1, "field1": "-", "field2": "-", "time": "-"})
+    # Format date
+    dateFormatted = datetime.date.today().strftime("%A, %d %B %Y")
+    return {
+        "success": True,
+        "date": today,
+        "dateFormatted": dateFormatted,
+        "sections": sections
+    }
 
 
 @app.get("/api/past")
