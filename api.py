@@ -113,12 +113,12 @@ def previous_days(days: int = Query(7, ge=1, le=365)) -> dict:
             "data": results_by_date
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))   "data": results_by_date
-    }
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":
     import uvicorn
 
     port = int(os.getenv("PORT", "8000"))
+    uvicorn.run(app, host="0.0.0.0", port=port)    port = int(os.getenv("PORT", "8000"))
     uvicorn.run(app, host="0.0.0.0", port=port)
