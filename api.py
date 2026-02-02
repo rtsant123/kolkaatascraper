@@ -94,6 +94,26 @@ def by_date(date: str = Query(..., regex=r"\d{4}-\d{2}-\d{2}")) -> List[Dict[str
     return db.get_results_by_date(date)
 
 
+@app.get("/api/previous-days")
+def previous_days(days: int = Query(7, ge=1, le=365)) -> dict:
+    """Returns results grouped by date for the previous N days (excluding today)."""
+    import datetime
+    results_by_date = {}
+    
+    for i in range(1, days + 1):
+        date_obj = datetime.date.today() - datetime.timedelta(days=i)
+        date_str = date_obj.strftime("%Y-%m-%d")
+        results = db.get_results_by_date(date_str)
+        if results:
+            results_by_date[date_str] = results
+    
+    return {
+        "success": True,
+        "days_requested": days,
+        "data": results_by_date
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
 
