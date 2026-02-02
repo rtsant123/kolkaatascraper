@@ -57,8 +57,6 @@ def latest() -> Optional[Dict[str, Any]]:
 # Returns all results for today only, in custom format
 @app.get("/api/latest-day")
 def latest_day() -> dict:
-    import datetime
-    import calendar
     today = datetime.date.today().strftime("%Y-%m-%d")
     results = db.get_results_by_date(today)
     # Prepare sections (always 8)
@@ -120,5 +118,4 @@ if __name__ == "__main__":
     import uvicorn
 
     port = int(os.getenv("PORT", "8000"))
-    uvicorn.run(app, host="0.0.0.0", port=port)    port = int(os.getenv("PORT", "8000"))
     uvicorn.run(app, host="0.0.0.0", port=port)
