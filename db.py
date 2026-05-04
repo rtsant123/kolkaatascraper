@@ -189,8 +189,17 @@ def cleanup_old(retention_days: int) -> int:
     conn.commit()
     cursor.close()
     conn.close()
+    def cleanup_old(retention_days: int) -> int:
+    cutoff = int(time.time()) - retention_days * 86400
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM results WHERE created_at < %s", (cutoff,))
+    deleted = cursor.rowcount
+    conn.commit()
+    cursor.close()
+    conn.close()
     if deleted:
-        log_event(logging.INFO, "cleanup_deleted", deleted=deleted)
+        log_event(logging.INFO, "cleanup_deleted", deleted=deleted)  # <-- THIS LINE IS THE BUG
     return deleted
 
 
